@@ -15,3 +15,11 @@ venv/
 *.bin
 output
 version.py
+# DPHC publication rules
+!tools/cfgs/**/*.yaml
+!tools/scripts/*.sh
+logs/
+*.log
+*.bak
+*.orig
+*.Zone.Identifier

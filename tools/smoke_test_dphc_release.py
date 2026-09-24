@@ -99,6 +99,10 @@ def check_cpf_contract():
         for n in ast.walk(tree))
     assert "non_ped_mask = main_pred['pred_labels'] != 2" in source
     assert "PED_SCORE_THRESH" in source
+    aux_source = (REPO_ROOT / "pcdet/models/detectors/pointpillar_aux.py").read_text()
+    assert "param.requires_grad = False" in aux_source
+    assert "with torch.no_grad():" in aux_source
+    assert "module.eval()" in aux_source
 
 if __name__ == "__main__":
     check_configs()

@@ -1,0 +1,9 @@
+DPHC-PointPillars
+
+This software includes and modifies OpenPCDet:
+https://github.com/open-mmlab/OpenPCDet
+
+OpenPCDet is distributed under Apache License 2.0. The original LICENSE and
+upstream Git history are retained. DPHC modifications include density-aware
+pillar encoding, a full-resolution pedestrian context branch, frozen-main
+two-stage training and class-selective prediction fusion.
