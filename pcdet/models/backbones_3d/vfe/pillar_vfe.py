@@ -56,8 +56,11 @@ class PillarVFE(VFETemplate):
         self.use_norm = self.model_cfg.USE_NORM
         self.with_distance = self.model_cfg.WITH_DISTANCE
         self.use_absolute_xyz = self.model_cfg.USE_ABSLOTE_XYZ
+        self.use_density_feature = self.model_cfg.get('USE_DENSITY_FEATURE', False)
         num_point_features += 6 if self.use_absolute_xyz else 3
         if self.with_distance:
+            num_point_features += 1
+        if self.use_density_feature:
             num_point_features += 1
 
         self.num_filters = self.model_cfg.NUM_FILTERS
@@ -110,6 +113,18 @@ class PillarVFE(VFETemplate):
         if self.with_distance:
             points_dist = torch.norm(voxel_features[:, :, :3], 2, 2, keepdim=True)
             features.append(points_dist)
+
+        if self.use_density_feature:
+            # Normalized pillar occupancy: N_i / N_max. The scalar is
+            # repeated for every point in the pillar before PFN encoding.
+            max_points = float(voxel_features.shape[1])
+            density = voxel_num_points.type_as(voxel_features).clamp(
+                min=0, max=voxel_features.shape[1]
+            ) / max_points
+            density = density.view(-1, 1, 1).repeat(
+                1, voxel_features.shape[1], 1
+            )
+            features.append(density)
         features = torch.cat(features, dim=-1)
 
         voxel_count = features.shape[1]

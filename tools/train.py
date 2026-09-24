@@ -32,6 +32,7 @@ def parse_config():
     parser.add_argument('--tcp_port', type=int, default=18888, help='tcp port for distrbuted training')
     parser.add_argument('--sync_bn', action='store_true', default=False, help='whether to use sync bn')
     parser.add_argument('--fix_random_seed', action='store_true', default=False, help='')
+    parser.add_argument('--seed', type=int, default=666, help='random seed used when --fix_random_seed is enabled')
     parser.add_argument('--ckpt_save_interval', type=int, default=1, help='number of training epochs')
     parser.add_argument('--local_rank', type=int, default=None, help='local rank for distributed training')
     parser.add_argument('--max_ckpt_save_num', type=int, default=30, help='max number of saved checkpoint')
@@ -88,7 +89,7 @@ def main():
     args.epochs = cfg.OPTIMIZATION.NUM_EPOCHS if args.epochs is None else args.epochs
 
     if args.fix_random_seed:
-        common_utils.set_random_seed(666 + cfg.LOCAL_RANK)
+        common_utils.set_random_seed(args.seed + cfg.LOCAL_RANK)
 
     output_dir = cfg.ROOT_DIR / 'output' / cfg.EXP_GROUP_PATH / cfg.TAG / args.extra_tag
     ckpt_dir = output_dir / 'ckpt'
@@ -110,6 +111,13 @@ def main():
         
     for key, val in vars(args).items():
         logger.info('{:16} {}'.format(key, val))
+    logger.info('{:16} {}'.format('seed_active', args.fix_random_seed))
+    if args.fix_random_seed:
+        logger.info('{:16} {}'.format('random_seed', args.seed))
+        import random as _random
+        import numpy as _np
+        logger.info('{:16} {}'.format('cudnn_determ', torch.backends.cudnn.deterministic))
+        logger.info('{:16} {}'.format('cudnn_benchmark', torch.backends.cudnn.benchmark))
     log_config_to_file(cfg, logger=logger)
     if cfg.LOCAL_RANK == 0:
         os.system('cp %s %s' % (args.cfg_file, output_dir))
@@ -126,7 +134,7 @@ def main():
         training=True,
         merge_all_iters_to_one_epoch=args.merge_all_iters_to_one_epoch,
         total_epochs=args.epochs,
-        seed=666 if args.fix_random_seed else None
+        seed=args.seed if args.fix_random_seed else None
     )
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=train_set)
@@ -139,15 +147,22 @@ def main():
     # load checkpoint if it is possible
     start_epoch = it = 0
     last_epoch = -1
+    pretrained_loaded = False
+    optimizer_restored = False
+    loaded_ckpt_epoch = -1
+
     if args.pretrained_model is not None:
         model.load_params_from_file(filename=args.pretrained_model, to_cpu=dist_train, logger=logger)
+        pretrained_loaded = True
 
     if args.ckpt is not None:
         it, start_epoch = model.load_params_with_optimizer(args.ckpt, to_cpu=dist_train, optimizer=optimizer, logger=logger)
         last_epoch = start_epoch + 1
+        optimizer_restored = True
+        loaded_ckpt_epoch = start_epoch
     else:
         ckpt_list = glob.glob(str(ckpt_dir / '*.pth'))
-              
+
         if len(ckpt_list) > 0:
             ckpt_list.sort(key=os.path.getmtime)
             while len(ckpt_list) > 0:
@@ -156,9 +171,32 @@ def main():
                         ckpt_list[-1], to_cpu=dist_train, optimizer=optimizer, logger=logger
                     )
                     last_epoch = start_epoch + 1
+                    optimizer_restored = True
+                    loaded_ckpt_epoch = start_epoch
                     break
                 except:
                     ckpt_list = ckpt_list[:-1]
+
+    # --------------- Training startup summary ---------------
+    logger.info('=' * 62)
+    logger.info('  Training Startup Summary')
+    logger.info('=' * 62)
+    logger.info(f'  pretrained_model     : {args.pretrained_model}')
+    logger.info(f'  ckpt                 : {args.ckpt}')
+    logger.info(f'  pretrained_loaded    : {pretrained_loaded}')
+    logger.info(f'  optimizer_restored   : {optimizer_restored}')
+    logger.info(f'  loaded_ckpt_epoch    : {loaded_ckpt_epoch}')
+    logger.info(f'  start_epoch          : {start_epoch}')
+    logger.info(f'  start_iter           : {it}')
+    logger.info(f'  last_epoch (sched)   : {last_epoch}')
+    logger.info(f'  total_epochs         : {args.epochs}')
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    frozen_params = total_params - trainable_params
+    logger.info(f'  total_params         : {total_params:,}')
+    logger.info(f'  trainable_params     : {trainable_params:,}')
+    logger.info(f'  frozen_params        : {frozen_params:,}')
+    logger.info('=' * 62)
 
     model.train()  # before wrap to DistributedDataParallel to support fixed some parameters
     if dist_train:
