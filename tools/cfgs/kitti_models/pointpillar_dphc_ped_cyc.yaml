@@ -1,0 +1,41 @@
+# Clean budget-matched comparison: Pedestrian+Cyclist auxiliary supervision.
+#
+# This inherits the complete stride-1 FullResContext DPHC configuration.
+# Compared with Ped-only DPHC, only the auxiliary head target set changes.
+# Selective inference keeps Car and Cyclist on the frozen main head and merges
+# only Pedestrian, so Ped AP is directly comparable with Ped-only DPHC.
+
+_BASE_CONFIG_: cfgs/kitti_models/pointpillar_dphc.yaml
+
+# OpenPCDet only expands one _BASE_CONFIG_ level. The parent DPHC config
+# references kitti_dataset.yaml, so materialise its loader fields here.
+DATA_CONFIG:
+    DATASET: KittiDataset
+    DATA_PATH: ../data/kitti
+    DATA_SPLIT: {
+        'train': train,
+        'test': val
+    }
+    INFO_PATH: {
+        'train': [kitti_infos_train.pkl],
+        'test': [kitti_infos_val.pkl]
+    }
+    GET_ITEM_LIST: [points]
+    FOV_POINTS_ONLY: True
+    POINT_FEATURE_ENCODING: {
+        encoding_type: absolute_coordinates_encoding,
+        used_feature_list: ['x', 'y', 'z', 'intensity'],
+        src_feature_list: ['x', 'y', 'z', 'intensity']
+    }
+
+MODEL:
+    NAME: PointPillarSmallAux
+
+    SMALL_OBJECT_AUX:
+        AUX_INPUT_SOURCE: fullres
+        CLASS_NAMES: ['Pedestrian', 'Cyclist']
+        AUX_INFERENCE_MODE: selective
+
+OPTIMIZATION:
+    BATCH_SIZE_PER_GPU: 2
+    NUM_EPOCHS: 50

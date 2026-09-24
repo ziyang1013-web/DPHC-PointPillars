@@ -1,7 +1,19 @@
+# DPHC: Pedestrian-only High-Resolution Context Auxiliary Branch
+#
+# 与 Exp3 共享相同的 fullres_context 辅助 Backbone，唯一区别：
+#   辅助检测头只训练和预测 Pedestrian（单类别），不包含 Cyclist。
+#
+# 推理模式：
+#   ped_selective: Car=main_only, Ped=main+aux merged, Cyc=main_only
+#
+# 从 Density-only checkpoint 初始化，从 epoch 0 训练 50 epoch。
+
 CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 
-DATA_CONFIG: 
+DATA_CONFIG:
     _BASE_CONFIG_: cfgs/dataset_configs/kitti_dataset.yaml
+    DATA_SPLIT: {'train': trainval, 'test': val}
+    INFO_PATH: {'train': [kitti_infos_trainval.pkl], 'test': [kitti_infos_val.pkl]}
     POINT_CLOUD_RANGE: [0, -39.68, -3, 69.12, 39.68, 1]
     DATA_PROCESSOR:
         - NAME: mask_points_and_boxes_outside_range
@@ -26,7 +38,7 @@ DATA_CONFIG:
             - NAME: gt_sampling
               USE_ROAD_PLANE: False
               DB_INFO_PATH:
-                  - kitti_dbinfos_train.pkl
+                  - kitti_dbinfos_trainval.pkl
               PREPARE: {
                  filter_by_min_points: ['Car:5', 'Pedestrian:5', 'Cyclist:5'],
                  filter_by_difficulty: [-1],
@@ -48,7 +60,7 @@ DATA_CONFIG:
               WORLD_SCALE_RANGE: [0.95, 1.05]
 
 MODEL:
-    NAME: PointPillar
+    NAME: PointPillarDPHC
 
     VFE:
         NAME: PillarVFE
@@ -57,12 +69,20 @@ MODEL:
         USE_NORM: True
         NUM_FILTERS: [64]
 
+        # ---- Density ----
+        USE_DENSITY_FEATURE: True
+        USE_GATED_DENSITY: False
+        USE_DISTANCE_AWARE_DENSITY: False
+        USE_HEIGHT_AWARE_DENSITY: False
+        USE_DISTANCE_FEATURE: False
+        USE_MULTI_POOLING_PFN: False
+
     MAP_TO_BEV:
         NAME: PointPillarScatter
         NUM_BEV_FEATURES: 64
 
     BACKBONE_2D:
-        NAME: BaseBEVBackbone
+        NAME: BaseBEVBackboneWithIntermediate
         LAYER_NUMS: [3, 5, 5]
         LAYER_STRIDES: [2, 2, 2]
         NUM_FILTERS: [64, 128, 256]
@@ -131,9 +151,7 @@ MODEL:
         RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
         SCORE_THRESH: 0.1
         OUTPUT_RAW_SCORE: False
-
         EVAL_METRIC: kitti
-
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
             NMS_TYPE: nms_gpu
@@ -141,10 +159,29 @@ MODEL:
             NMS_PRE_MAXSIZE: 4096
             NMS_POST_MAXSIZE: 500
 
+    # ============================================================
+    #  DPHC: Pedestrian-only Auxiliary Branch
+    # ============================================================
+    SMALL_OBJECT_AUX:
+        ENABLED: True
+        EXPERIMENT_TYPE: fullres_context
+        CLASS_NAMES: ['Pedestrian']
+        FEATURE_MAP_STRIDE: 1
+        HIDDEN_CHANNELS: 32
+        OUTPUT_CHANNELS: 64
+        DILATIONS: [1, 2]
+        USE_PLAIN_RESIDUAL: True
+        DETACH_INPUT: True
+        FREEZE_MAIN_BRANCH: True
+        AUX_LOSS_WEIGHT: 1.0
+        AUX_INFERENCE_MODE: ped_selective
+        PED_SCORE_THRESH: 0.3
+        USE_BATCH_NORM: True
+
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 4
-    NUM_EPOCHS: 80
+    BATCH_SIZE_PER_GPU: 2
+    NUM_EPOCHS: 33
 
     OPTIMIZER: adam_onecycle
     LR: 0.003

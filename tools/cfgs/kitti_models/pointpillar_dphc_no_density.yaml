@@ -1,6 +1,34 @@
+# No-Density + DPHC Auxiliary Branch (Ablation Study)
+#
+# 消融目的：验证 Density Feature 和 Auxiliary Branch 各自的独立贡献。
+#
+# DPHC (pointpillar_density_dphc_ped_only):
+#   Density: ON  + Aux Branch: ON  → Ped Mod=49.50
+# PointPillar-D (pointpillar_density_no_cds):
+#   Density: ON  + Aux Branch: OFF → Ped Mod=45.14
+# Baseline (pointpillar):
+#   Density: OFF + Aux Branch: OFF → Ped Mod=44.26
+#
+# 本实验 (No-Density + DPHC Aux):
+#   Density: OFF + Aux Branch: ON  → Ped Mod=???
+#
+# 与 DPHC 的唯一区别：
+#   USE_DENSITY_FEATURE: False
+#   pretrained_model 从 Baseline (no density) checkpoint 加载
+#
+# 其余完全不变：
+#   - PointPillarPedestrianAux 模型
+#   - AuxBEVBackboneFullResContext 辅助骨干网络
+#   - PedestrianAuxAnchorHeadSingle 辅助检测头
+#   - ped_selective 推理模式
+#   - 主分支冻结
+#   - seed=666
+#
+# 训练：从 epoch 0 开始，50 epoch，输出 Car/Pedestrian/Cyclist AP_R40。
+
 CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 
-DATA_CONFIG: 
+DATA_CONFIG:
     _BASE_CONFIG_: cfgs/dataset_configs/kitti_dataset.yaml
     POINT_CLOUD_RANGE: [0, -39.68, -3, 69.12, 39.68, 1]
     DATA_PROCESSOR:
@@ -48,7 +76,7 @@ DATA_CONFIG:
               WORLD_SCALE_RANGE: [0.95, 1.05]
 
 MODEL:
-    NAME: PointPillar
+    NAME: PointPillarDPHC
 
     VFE:
         NAME: PillarVFE
@@ -57,12 +85,20 @@ MODEL:
         USE_NORM: True
         NUM_FILTERS: [64]
 
+        # ---- 唯一更改：关闭 Density Feature ----
+        USE_DENSITY_FEATURE: False
+        USE_GATED_DENSITY: False
+        USE_DISTANCE_AWARE_DENSITY: False
+        USE_HEIGHT_AWARE_DENSITY: False
+        USE_DISTANCE_FEATURE: False
+        USE_MULTI_POOLING_PFN: False
+
     MAP_TO_BEV:
         NAME: PointPillarScatter
         NUM_BEV_FEATURES: 64
 
     BACKBONE_2D:
-        NAME: BaseBEVBackbone
+        NAME: BaseBEVBackboneWithIntermediate
         LAYER_NUMS: [3, 5, 5]
         LAYER_STRIDES: [2, 2, 2]
         NUM_FILTERS: [64, 128, 256]
@@ -131,9 +167,7 @@ MODEL:
         RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
         SCORE_THRESH: 0.1
         OUTPUT_RAW_SCORE: False
-
         EVAL_METRIC: kitti
-
         NMS_CONFIG:
             MULTI_CLASSES_NMS: False
             NMS_TYPE: nms_gpu
@@ -141,10 +175,29 @@ MODEL:
             NMS_PRE_MAXSIZE: 4096
             NMS_POST_MAXSIZE: 500
 
+    # ============================================================
+    #  DPHC Auxiliary Branch 完全不变
+    # ============================================================
+    SMALL_OBJECT_AUX:
+        ENABLED: True
+        EXPERIMENT_TYPE: fullres_context
+        AUX_INPUT_SOURCE: fullres
+        CLASS_NAMES: ['Pedestrian']
+        FEATURE_MAP_STRIDE: 1
+        HIDDEN_CHANNELS: 32
+        OUTPUT_CHANNELS: 64
+        DILATIONS: [1, 2]
+        USE_PLAIN_RESIDUAL: True
+        DETACH_INPUT: True
+        FREEZE_MAIN_BRANCH: True
+        AUX_LOSS_WEIGHT: 1.0
+        AUX_INFERENCE_MODE: ped_selective
+        USE_BATCH_NORM: True
+
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 4
-    NUM_EPOCHS: 80
+    BATCH_SIZE_PER_GPU: 2
+    NUM_EPOCHS: 50
 
     OPTIMIZER: adam_onecycle
     LR: 0.003

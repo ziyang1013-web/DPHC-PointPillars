@@ -1,6 +1,17 @@
+# PointPillar + Plain Density (No CDS-GT Sampling, Original Max Pooling)
+#
+# 实验名称: No-CDS + Plain Density + Original Max Pooling
+# 消融目的: 验证在普通 GT Sampling 条件下，仅加入 Plain Density 是否独立改善性能
+#
+# 与 Baseline (pointpillar.yaml) 的唯一区别:
+#   Baseline: 普通GT + 无Density + 原始Max Pooling
+#   本实验:   普通GT + Plain Density + 原始Max Pooling
+#
+# 输出标签: density_no_cds
+
 CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 
-DATA_CONFIG: 
+DATA_CONFIG:
     _BASE_CONFIG_: cfgs/dataset_configs/kitti_dataset.yaml
     POINT_CLOUD_RANGE: [0, -39.68, -3, 69.12, 39.68, 1]
     DATA_PROCESSOR:
@@ -56,6 +67,19 @@ MODEL:
         USE_ABSLOTE_XYZ: True
         USE_NORM: True
         NUM_FILTERS: [64]
+
+        # ---- Plain Density (唯一与 Baseline 不同的开启项) ----
+        USE_DENSITY_FEATURE: True
+
+        # ---- 显式关闭（与 Baseline 一致，仅为文档记录） ----
+        USE_GATED_DENSITY: False
+        USE_DISTANCE_AWARE_DENSITY: False
+        USE_HEIGHT_AWARE_DENSITY: False
+        USE_DISTANCE_FEATURE: False
+
+        USE_MULTI_POOLING_PFN: False
+        USE_ATTENTION_POOLING: False
+        USE_CONTEXT_ADAPTIVE_POOLING: False
 
     MAP_TO_BEV:
         NAME: PointPillarScatter
