@@ -5,8 +5,9 @@ extension for small and difficult-object detection on KITTI.
 
 This repository is built on [OpenPCDet](https://github.com/open-mmlab/OpenPCDet)
 and preserves its Apache-2.0 license and upstream history.
+<img width="7840" height="3236" alt="总结构图3 drawio" src="https://github.com/user-attachments/assets/eae48a69-9bbf-4a44-95cf-89f305972bb2" />
 
-![DPHC-PointPillars architecture](docs/assets/dphc_architecture.png)
+
 
 ## Method
 
