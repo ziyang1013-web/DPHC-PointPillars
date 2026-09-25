@@ -23,8 +23,10 @@ and preserves its Apache-2.0 license and upstream history.
 The public entry point is **PointPillarDPHC**. The legacy
 **PointPillarPedestrianAux** name remains available for compatibility.
 
-<p align="center"><img src="docs/assets/pfcb.png" width="92%" alt="PFCB"/></p>
-<p align="center"><img src="docs/assets/cpf.png" width="92%" alt="CPF"/></p>
+<img width="6964" height="2000" alt="高分辨率结构图 drawio" src="https://github.com/user-attachments/assets/3feca259-c180-47f2-a33e-bc6c570c3634" />
+
+<img width="2376" height="740" alt="类别融合流程图 drawio" src="https://github.com/user-attachments/assets/7673fddc-43d9-43f6-a42d-00600a50b5af" />
+
 
 ## Tested environment
 
